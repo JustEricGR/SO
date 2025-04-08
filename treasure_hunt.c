@@ -23,7 +23,7 @@ typedef struct {
 } GPS;
 
 typedef struct {
-    char id[10];
+    char id[15];
     char text[30];
     GPS coordinates;
     char clue[30];
@@ -36,8 +36,27 @@ typedef struct {
     Treasure *trasures;
 } Hunt;
 
-void add(const char *hunt_id, Treasure treasure) {
+void createLog(const char *hunt_id, const char *mes) {
+    char logName[256];
+    snprintf(logName, sizeof(logName), "Log%s.txt", hunt_id);
 
+    int fd = open(logName, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    
+
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char timeStr[64];
+    strftime(timeStr, sizeof(timeStr), "[%Y-%m-%d %H:%M:%S] ", tm_info);
+
+    write(fd, timeStr, strlen(timeStr));
+    write(fd, mes, strlen(mes));
+    write(fd, "\n", 1);
+    close(fd);
+}
+
+void add(const char *hunt_id, Treasure treasure) {
+    char *logMessage=(char*)malloc(500*sizeof(char));
+    logMessage[0]=0;
     DIR *mydir;
     struct dirent *myfile;
     //struct stat mystat;
@@ -59,6 +78,12 @@ void add(const char *hunt_id, Treasure treasure) {
             
             write(fd, &treasure, sizeof(Treasure));
             close(fd);
+            
+            char aux[300] = "";
+            sprintf(aux, "Added %s to %s\n", treasure.id, hunt_id);
+            strcat(logMessage, aux);
+            createLog(hunt_id, logMessage);
+            free(logMessage);
             chdir("..");
             break;
         }
@@ -74,6 +99,18 @@ void add(const char *hunt_id, Treasure treasure) {
 
         write(fd, &treasure, sizeof(Treasure));
         close(fd);
+        struct stat mystat;
+        if (stat(hunt_id, &mystat) == 0) {
+            printf("Size: %ld\n", mystat.st_size);
+            printf("Ultima modificare: %s", ctime(&mystat.st_mtime));
+            strcat(logMessage, ctime(&mystat.st_mtime));
+        }
+
+        char aux[300] = "";
+        sprintf(aux, "Added %s to %s\n", treasure.id, hunt_id);
+        strcat(logMessage, aux);
+        createLog(hunt_id, logMessage);
+        free(logMessage);
         chdir("..");
 
         if(result!=0) {
@@ -91,6 +128,8 @@ void add(const char *hunt_id, Treasure treasure) {
 }
 
 void list(const char *hunt_id) {
+    char *logMessage=(char*)malloc(500*sizeof(char));
+    logMessage[0]=0;
     DIR *mydir;
     struct dirent *myfile;
     //struct stat mystat;
@@ -121,6 +160,11 @@ void list(const char *hunt_id) {
                 printf("%9s %s %f %f %29s %d\n",treasure.id, treasure.text, treasure.coordinates.latitudine, treasure.coordinates.longitudine, treasure.clue, treasure.val);
                 close(fd);
             }
+            char aux[300] = "";
+            sprintf(aux, "Listing treasures in hunt %s\n", hunt_id);
+            strcat(logMessage, aux);
+            createLog(hunt_id, logMessage);
+            free(logMessage);
             closedir(hunt_dir);
             chdir("..");
             break;
@@ -133,6 +177,8 @@ void list(const char *hunt_id) {
 void view(const char *treasure_id) {
     DIR *main_dir;
     struct dirent *hunt_entry;
+    char *logMessage=(char*)malloc(500*sizeof(char));
+    logMessage[0]=0;
 
     main_dir = opendir("proiect");
 
@@ -174,6 +220,11 @@ void view(const char *treasure_id) {
                 printf("%9s %29s %f %f %29s %d\n", treasure.id, treasure.text,
                        treasure.coordinates.latitudine, treasure.coordinates.longitudine,
                        treasure.clue, treasure.val);
+                char aux[300] = "";
+                sprintf(aux, "Viewed %s from %s\n", treasure.id, hunt_entry->d_name);
+                strcat(logMessage, aux);
+                createLog(hunt_entry->d_name, logMessage);
+                free(logMessage);
                 break;
             }
         }
@@ -186,7 +237,6 @@ void view(const char *treasure_id) {
     }
 
     closedir(main_dir);
-    chdir("SO"); 
 
     if (!found)
         printf("Comoara cu ID-ul '%s' nu a fost gasita.\n", treasure_id);
@@ -195,7 +245,8 @@ void view(const char *treasure_id) {
 void remove_treasure(const char *treasure_id) {
     DIR *main_dir;
     struct dirent *hunt_entry;
-
+    char *logMessage=(char*)malloc(500*sizeof(char));
+    logMessage[0]=0;
     main_dir = opendir("proiect");
 
     chdir("proiect");
@@ -223,6 +274,11 @@ void remove_treasure(const char *treasure_id) {
             if (!strcmp(file_entry->d_name, treasure_id)) {
                 found = 1;
                 remove(file_entry->d_name);
+                char aux[300] = "";
+                sprintf(aux, "Removed %s from %s\n", treasure_id, hunt_entry->d_name);
+                strcat(logMessage, aux);
+                createLog(hunt_entry->d_name, logMessage);
+                free(logMessage);
                 break;
             }
         }
@@ -362,4 +418,3 @@ int main(int argc, char **argv) {
     }
     
 }
-
