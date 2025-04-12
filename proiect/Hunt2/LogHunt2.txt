@@ -1,0 +1,10 @@
+[2025-04-12 21:32:28] Added Treasure5 to Hunt2
+
+[2025-04-12 21:32:40] Added Treasure4 to Hunt2
+
+[2025-04-12 21:32:58] Listing treasures in hunt Hunt2
+
+[2025-04-12 21:33:28] Removed Treasure5 from Hunt2
+
+[2025-04-12 21:33:30] Listing treasures in hunt Hunt2
+

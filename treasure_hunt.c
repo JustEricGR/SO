@@ -42,8 +42,15 @@ void createLog(const char *hunt_id, const char *mes) {
     char logName[256];
     snprintf(logName, sizeof(logName), "Log%s.txt", hunt_id);
 
+    int new_file = access(logName, F_OK) != 0;
+
     int fd = open(logName, O_WRONLY | O_CREAT | O_APPEND, 0644);
     
+    if (new_file) {
+        char symlinkName[300];
+        snprintf(symlinkName, sizeof(symlinkName), "../logged_hunt-%s", hunt_id);
+        symlink(logName, symlinkName);
+    }
 
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
@@ -290,8 +297,8 @@ void view(const char *treasure_id) {
 void remove_treasure(const char *treasure_id) {
     DIR *main_dir;
     struct dirent *hunt_entry;
-    char *logMessage=(char*)malloc(500*sizeof(char));
-    logMessage[0]=0;
+    char *logMessage = (char *)malloc(500 * sizeof(char));
+    logMessage[0] = 0;
     main_dir = opendir("proiect");
 
     chdir("proiect");
@@ -313,66 +320,66 @@ void remove_treasure(const char *treasure_id) {
 
         struct dirent *file_entry;
         while ((file_entry = readdir(hunt_dir)) != NULL) {
-            if (strcmp(file_entry->d_name, ".") == 0 || strcmp(file_entry->d_name, "..") == 0 || strstr(file_entry->d_name,"Log")!=NULL)
+            if (strcmp(file_entry->d_name, ".") == 0 || strcmp(file_entry->d_name, "..") == 0 || strstr(file_entry->d_name, "Log") != NULL)
                 continue;
-            
-            else {
-                int fd = open(file_entry->d_name, O_RDONLY);
-                if (fd < 0) {
-                    perror("Eroare la deschiderea fisierului");
-                    break;
-                }
 
-                Treasure treasure;
-                while(read(fd, &treasure, sizeof(Treasure)) == sizeof(Treasure)) {
-                    if(!strcmp(treasure.id, treasure_id)) {
-                        found = 1;
-                        long offsetStart = SEEK_CUR - sizeof(Treasure);
-                        int crt_size=CHUNK;
-                        int index=0;
-                        Treasure *aux=(Treasure*)malloc(crt_size*sizeof(Treasure));
-                        while(read(fd, &aux[index], sizeof(Treasure)) == sizeof(Treasure)) {
-                            if(index>=crt_size) {
-                                crt_size+=CHUNK;
-                                aux=(Treasure*)realloc(aux,crt_size*sizeof(Treasure));
-                            }
-                        }
-                        lseek(fd, 0, offsetStart);
-                        for(int i=0;i<index;i++) {
-                            write(fd, &aux[i], sizeof(Treasure));
-                        }
-                        free(aux);
-                        break;
-                    }
-                }
-                close(fd);
+            int fd = open(file_entry->d_name, O_RDWR);
+            if (fd < 0) {
+                perror("Eroare la deschiderea fisierului");
+                continue;
             }
+
+            Treasure *all = NULL;
+            int size = 0, capacity = CHUNK;
+            all = malloc(capacity * sizeof(Treasure));
+            Treasure t;
+
+            while (read(fd, &t, sizeof(Treasure)) == sizeof(Treasure)) {
+                if (strcmp(t.id, treasure_id) != 0) {
+                    if (size >= capacity) {
+                        capacity += CHUNK;
+                        all = realloc(all, capacity * sizeof(Treasure));
+                    }
+                    all[size++] = t;
+                } 
+                else {
+                    found = 1;
+                }
+            }
+
             if (found) {
-                
-                remove(file_entry->d_name);
+                lseek(fd, 0, SEEK_SET);
+                write(fd, all, size * sizeof(Treasure));
+                ftruncate(fd, size * sizeof(Treasure));
+
                 char aux[300] = "";
                 sprintf(aux, "Removed %s from %s\n", treasure_id, hunt_entry->d_name);
                 strcat(logMessage, aux);
                 createLog(hunt_entry->d_name, logMessage);
                 free(logMessage);
-                break;
+                free(all);
+                close(fd);
+                closedir(hunt_dir);
+                chdir("..");
+                closedir(main_dir);
+                return;
             }
+
+            close(fd);
         }
 
         closedir(hunt_dir);
         chdir("..");
-
-        if (found)
-            break;
     }
 
     closedir(main_dir);
-    //chdir(".."); 
 
     if (!found)
         printf("Comoara cu ID-ul '%s' nu a fost gasita.\n", treasure_id);
 
+    free(logMessage);
 }
+
 
 
 void remove_hunt(const char *hunt_id) {
@@ -457,7 +464,7 @@ const char *clues[] = {
     t.coordinates.latitudine = ((float)(rand() % 18000) / 100.0f) - 90.0f;
     t.coordinates.longitudine = ((float)(rand() % 36000) / 100.0f) - 180.0f;
 
-    // Alege indiciu aleatoriu
+    
     int clue_index = rand() % (sizeof(clues) / sizeof(clues[0]));
     strncpy(t.clue, clues[clue_index], sizeof(t.clue));
 
