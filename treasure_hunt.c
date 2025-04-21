@@ -1,42 +1,7 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <dirent.h>
-#include <string.h>
-#include <fcntl.h>
-#include <time.h>
+#include "treasureFunctions.h"
 
 #define CHUNK 10
 
-typedef enum {
-    ADD,
-    LIST,
-    VIEW,
-    REMOVE_TREASURE,
-    REMOVE_HUNT
-} Options;
-
-
-typedef struct {
-    float latitudine;
-    float longitudine;
-} GPS;
-
-typedef struct {
-    char id[15];
-    char text[30];
-    GPS coordinates;
-    char clue[30];
-    int val;
-} Treasure;
-
-
-typedef struct {
-    const char *hunt_id;
-    Treasure *trasures;
-} Hunt;
 
 void createLog(const char *hunt_id, const char *mes) {
     char logName[256];
@@ -221,6 +186,77 @@ void list(const char *hunt_id) {
 
     if(!flag) printf("Nu exista huntul\n");
 }
+
+void list_hunts() {
+    DIR *mydir = opendir("proiect");
+    if (!mydir) {
+        perror("Eroare la deschiderea directorului 'proiect'");
+        return;
+    }
+
+    if (chdir("proiect") < 0) {
+        perror("Eroare la schimbarea directorului");
+        closedir(mydir);
+        return;
+    }
+
+    struct dirent *myfile;
+    char flag = 0;
+
+    while ((myfile = readdir(mydir)) != NULL) {
+        if (strcmp(myfile->d_name, ".") == 0 || strcmp(myfile->d_name, "..") == 0)
+            continue;
+
+        struct stat st;
+        if (stat(myfile->d_name, &st) < 0 || !S_ISDIR(st.st_mode))
+            continue;
+
+        if (strstr(myfile->d_name, "log") != NULL || strstr(myfile->d_name, "Log") != NULL)
+            continue;
+
+        DIR *hunt_dir = opendir(myfile->d_name);
+        if (!hunt_dir)
+            continue;
+
+        if (chdir(myfile->d_name) < 0) {
+            closedir(hunt_dir);
+            continue;
+        }
+
+        struct dirent *myfile1;
+        while ((myfile1 = readdir(hunt_dir)) != NULL) {
+            if (strcmp(myfile1->d_name, ".") == 0 || strcmp(myfile1->d_name, "..") == 0)
+                continue;
+
+            if (strstr(myfile1->d_name, "Log") != NULL || strstr(myfile1->d_name, "log") != NULL)
+                continue;
+
+            Treasure treasure;
+            int fd = open(myfile1->d_name, O_RDONLY);
+            if (fd < 0) continue;
+
+            while (read(fd, &treasure, sizeof(Treasure)) == sizeof(Treasure)) {
+                printf("%15s %29s %f %f %29s %d\n",
+                       treasure.id, treasure.text,
+                       treasure.coordinates.latitudine,
+                       treasure.coordinates.longitudine,
+                       treasure.clue, treasure.val);
+                flag = 1;
+            }
+
+            close(fd);
+        }
+
+        closedir(hunt_dir);
+        chdir("..");
+    }
+
+    closedir(mydir);
+
+    if (!flag)
+        printf("Nu exista huntul\n");
+}
+
 
 void view(const char *treasure_id) {
     DIR *main_dir;
@@ -474,30 +510,3 @@ const char *clues[] = {
     return t;
 }
 
-int main(int argc, char **argv) {
-    Options opt;
-    if(!strcmp(argv[1],"--add")) opt=ADD;
-    else if(!strcmp(argv[1],"--list")) opt=LIST;
-    else if(!strcmp(argv[1],"--view")) opt=VIEW;
-    else if(!strcmp(argv[1],"--remove_treasure")) opt=REMOVE_TREASURE;
-    else if(!strcmp(argv[1],"--remove_hunt")) opt=REMOVE_HUNT;
-    switch(opt) {
-        case ADD :
-            Treasure aux = treasure_generator(argv[3]);
-            add(argv[2], aux);
-            break;
-        case LIST :
-            list(argv[2]);
-            break;
-        case VIEW :
-            view(argv[2]);
-            break;
-        case REMOVE_TREASURE :
-            remove_treasure(argv[2]);
-            break;
-        case REMOVE_HUNT :
-            remove_hunt(argv[2]);
-            break;
-    }
-    
-}
