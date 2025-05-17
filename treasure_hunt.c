@@ -1,4 +1,5 @@
 #include "treasureFunctions.h"
+#include <sys/wait.h>
 
 #define CHUNK 10
 
@@ -462,19 +463,64 @@ void remove_hunt(const char *hunt_id) {
 }
 
 
+void calculateScore() {
+    DIR *mydir = opendir(".");
+    struct dirent *entry;
+    if (!mydir) {
+        perror("Nu pot deschide directorul");
+        return;
+    }
+
+    while ((entry = readdir(mydir)) != NULL) {
+        if (entry->d_type == DT_DIR && strncmp(entry->d_name, "Hunt", 4) == 0) {
+            int pipefd[2];
+            pipe(pipefd);
+            pid_t pid = fork();
+
+            if (pid == 0) {
+                // Proces copil
+                close(pipefd[0]);
+                dup2(pipefd[1], STDOUT_FILENO);
+                char cwd[1024];
+                getcwd(cwd, sizeof(cwd));
+                printf("[DEBUG] Execut din: %s\n", cwd);
+                printf("[DEBUG] Vreau să rulez: ./score_calc %s\n", entry->d_name);
+
+                chdir("..");
+                execl("./score_calc", "./score_calc", entry->d_name, NULL);
+                perror("exec score_calc");
+                exit(1);
+            } 
+            else {
+                close(pipefd[1]);
+                char buffer[1024];
+                ssize_t bytesRead;
+
+                while ((bytesRead = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+                    buffer[bytesRead] = '\0';
+                    printf("%s", buffer);
+                }
+
+                close(pipefd[0]);
+                waitpid(pid, NULL, 0);
+            }
+        }
+    }
+
+    closedir(mydir);
+}
+
+
+
+
+
 Treasure treasure_generator(const char *nume) {
     srand(time(NULL));
     const char *texts[] = {
-    "Comoara stralucitoare",
-    "Inelul fermecat",
-    "Sabia uitata",
-    "Cartea magica",
-    "Elixirul vietii",
-    "Cufarul de aur",
-    "Medalionul regal",
-    "Scroll-ul antic",
-    "Sfera misterioasa",
-    "Lanterna eterna"
+    "user1",
+    "user2",
+    "user3",
+    "user4"
 };
 
 const char *clues[] = {

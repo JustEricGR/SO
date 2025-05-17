@@ -29,6 +29,12 @@ typedef struct {
     int val;
 } Treasure;
 
+typedef struct {
+    char text[30];
+    int scor;
+} User_score;
+
+void calculateScore();
 void createLog(const char *hunt_id, const char *mes);
 void list(const char *hunt_id);
 void add(const char *hunt_id, Treasure treasure);
