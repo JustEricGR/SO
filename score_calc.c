@@ -1,83 +1,99 @@
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <dirent.h>
 #include <string.h>
+#include <dirent.h>
 #include <fcntl.h>
-#include <time.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include "treasureFunctions.h"
 
-typedef struct {
-    float latitudine;
-    float longitudine;
-} GPS;
-
-typedef struct {
-    char id[15];
-    char text[30];
-    GPS coordinates;
-    char clue[30];
-    int val;
-} Treasure;
-
-typedef struct {
-    char text[30];
-    int scor;
-} User_score;
-
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <hunt_dir>\n", argv[0]);
-        return 1;
+User_score* get_user_scores(const char *hunt_name, int *count) {
+    chdir("proiect");
+    DIR *hunt_dir = opendir(hunt_name);
+    if (!hunt_dir) {
+        perror("Eroare la deschiderea directorului hunt");
+        *count = 0;
+        return NULL;
     }
 
-    char path[256];
-    snprintf(path, sizeof(path), "proiect/%s", argv[1]);
-
-    DIR *d = opendir(path);
-    if (!d) {
-        perror("Deschidere hunt_dir");
-        return 1;
+    if (chdir(hunt_name) < 0) {
+        perror("Eroare la schimbarea directorului hunt");
+        closedir(hunt_dir);
+        *count = 0;
+        return NULL;
     }
 
-    User users[100];
-    int user_count = 0;
+    User_score *useri = NULL;
+    int index = 0;
 
-    struct dirent *entry;
-    while ((entry = readdir(d)) != NULL) {
-        if (entry->d_type != DT_REG) continue;
+    struct dirent *myfile;
+    while ((myfile = readdir(hunt_dir)) != NULL) {
+        if (strcmp(myfile->d_name, ".") == 0 || strcmp(myfile->d_name, "..") == 0)
+            continue;
 
-        char fpath[512];
-        snprintf(fpath, sizeof(fpath), "%s/%s", path, entry->d_name);
-        int fd = open(fpath, O_RDONLY);
+        if (strstr(myfile->d_name, "log") != NULL || strstr(myfile->d_name, "Log") != NULL)
+            continue;
+
+        Treasure treasure;
+        int fd = open(myfile->d_name, O_RDONLY);
         if (fd < 0) continue;
 
-        Treasure t;
-        while (read(fd, &t, sizeof(Treasure)) == sizeof(Treasure)) {
+        while (read(fd, &treasure, sizeof(Treasure)) == sizeof(Treasure)) {
             int found = 0;
-            for (int i = 0; i < user_count; ++i) {
-                if (strcmp(users[i].user, t.text) == 0) {
-                    users[i].score += t.val;
+            for (int i = 0; i < index; i++) {
+                if (strcmp(useri[i].text, treasure.text) == 0) {
+                    useri[i].scor += treasure.val;
                     found = 1;
                     break;
                 }
             }
+
             if (!found) {
-                strncpy(users[user_count].user, t.text, sizeof(t.text));
-                users[user_count].score = t.val;
-                user_count++;
+                User_score *temp = realloc(useri, (index + 1) * sizeof(User_score));
+                if (!temp) {
+                    perror("Eroare realloc");
+                    close(fd);
+                    closedir(hunt_dir);
+                    free(useri);
+                    chdir("..");
+                    *count = 0;
+                    return NULL;
+                }
+                useri = temp;
+                strncpy(useri[index].text, treasure.text, sizeof(useri[index].text) - 1);
+                useri[index].text[sizeof(useri[index].text) - 1] = '\0';
+                useri[index].scor = treasure.val;
+                index++;
             }
         }
 
         close(fd);
     }
 
-    closedir(d);
+    closedir(hunt_dir);
+    chdir("..");
+    *count = index;
+    return useri;
+}
 
-    printf("Rezultate pentru %s:\n", argv[1]);
-    for (int i = 0; i < user_count; i++) {
-        printf("%25s: %d\n", users[i].user, users[i].score);
+void print_scores(User_score *users, int count, const char *hunt_name) {
+    printf("Scoruri pentru hunt: %s\n", hunt_name);
+    for (int i = 0; i < count; ++i) {
+        printf("%29s: %d\n", users[i].text, users[i].scor);
+    }
+}
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Utilizare: %s <nume_hunt>\n", argv[0]);
+        return 1;
+    }
+
+    int user_count = 0;
+    User_score *users = get_user_scores(argv[1], &user_count);
+    if (users) {
+        print_scores(users, user_count, argv[1]);
+        free(users);
     }
 
     return 0;
